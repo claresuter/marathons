@@ -104,4 +104,87 @@ ggsave(file.path(pdf_path, "split_pct_diff_by_gender_all.pdf"), split_pct_diff_b
 nrow(data[data$gender == "M" & data$pct_diff >= 10,])/nrow(data[data$gender == "M",])
 nrow(data[data$gender == "F" & data$pct_diff >= 10,])/nrow(data[data$gender == "F",])
 
+# compare 1st and 4th 10k split
+data = data %>%
+  mutate(split_10k_4 = split_40k - split_30k)
+
+# percent difference of 4th 10k split relative to first 10k split
+data = data %>%
+  mutate(pct_diff_10k = ((split_10k_4 - split_10k) / split_10k) * 100)
+
+split_pct_diff_by_gender_10k = data %>%
+  filter(!is.na(pct_diff), gender %in% c("M", "F")) %>%
+  ggplot(aes(x = pct_diff_10k, color = gender, fill = gender)) +
+  scale_fill_manual(values = gender_cols) +
+  scale_color_manual(values = gender_cols) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "gray70") +
+  geom_density(alpha = 0.15, adjust = 1) +
+  labs(
+    title = "How much slower is the 4th 10k split (relative to 1st)",
+    x = "Percent Split Diff (%)",
+    y = "Density",
+    color = "Gender",
+    fill = "Gender"
+  ) +
+  coord_cartesian(xlim = c(-30, 100)) +
+  theme_minimal(base_size = 12)
+ggsave(file.path(pdf_path, "split_pct_diff_by_gender_all_10k.pdf"), split_pct_diff_by_gender_10k, width = 5, height = 3.5, device = cairo_pdf)
+
+
+################################################################################################
+# filter to the chicago marathon?
+################################################################################################
+# 255k obs when we filter to chi
+chi = data %>%
+  filter(marathon == "Chicago Marathon")
+
+chi_split_pct_diff_by_gender = chi %>%
+  filter(!is.na(pct_diff), gender %in% c("M", "F")) %>%
+  ggplot(aes(x = pct_diff, color = gender, fill = gender)) +
+  scale_fill_manual(values = gender_cols) +
+  scale_color_manual(values = gender_cols) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "gray70") +
+  geom_density(alpha = 0.15, adjust = 1) +
+  labs(
+    title = "Chicago: Split Distribution by Gender",
+    x = "Percent Split Diff (Second Half - First Half) (%)",
+    y = "Density",
+    color = "Gender",
+    fill = "Gender"
+  ) +
+  coord_cartesian(xlim = c(-30, 60)) +
+  theme_minimal(base_size = 12)
+ggsave(file.path(pdf_path, "split_pct_diff_by_gender_chi.pdf"), chi_split_pct_diff_by_gender, width = 5, height = 3.5, device = cairo_pdf)
+
+# share of men vs women who have a second half split that's 10% slower than the first half
+nrow(chi[chi$gender == "M" & chi$pct_diff >= 20,])/nrow(chi[chi$gender == "M",])
+nrow(chi[chi$gender == "F" & chi$pct_diff >= 20,])/nrow(chi[chi$gender == "F",])
+
+split_pct_diff_by_gender_10k_chi = chi %>%
+  filter(!is.na(pct_diff), gender %in% c("M", "F")) %>%
+  ggplot(aes(x = pct_diff_10k, color = gender, fill = gender)) +
+  scale_fill_manual(values = gender_cols) +
+  scale_color_manual(values = gender_cols) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "gray70") +
+  geom_density(alpha = 0.15, adjust = 1) +
+  labs(
+    title = "How much slower is the 4th 10k split (relative to 1st)",
+    x = "Percent Split Diff (%)",
+    y = "Density",
+    color = "Gender",
+    fill = "Gender"
+  ) +
+  coord_cartesian(xlim = c(-30, 100)) +
+  theme_minimal(base_size = 12)
+ggsave(file.path(pdf_path, "split_pct_diff_by_gender_chi_10k.pdf"), split_pct_diff_by_gender_10k_chi, width = 5, height = 3.5, device = cairo_pdf)
+
+
+nrow(chi[chi$gender == "M" & chi$pct_diff_10k >= 30,])/nrow(chi[chi$gender == "M",])
+nrow(chi[chi$gender == "F" & chi$pct_diff_10k >= 30,])/nrow(chi[chi$gender == "F",])
+
+# what does this look like in a reg
+summary(lm(pct_diff ~ gender + chiptime, data = data %>% filter(gender %in% c("M", "F"))))
+
+data = data %>% mutate(blowup = ifelse(pct_diff >= 25, 1, 0))
+summary(lm(blowup ~ gender + chiptime + chiptime*gender, data = data %>% filter(gender %in% c("M", "F"))))
 
