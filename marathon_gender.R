@@ -12,35 +12,41 @@ library(kableExtra)
 library(lubridate)
 library(entropy)
 
-data_path = paste0(getwd(), "/Downloads")
+current_user = Sys.info()[["user"]]
+
+if (current_user == "claresuter") {
+  data_path = "/Users/claresuter/Documents/harvard/marathons/data"
+  pdf_path = "/Users/claresuter/Documents/harvard/marathons/figs"
+}
 
 ################################################################################################
-# load data
+# load data from pope/wu marathon project
 ################################################################################################
 
-data = read.csv(file.path(data_path, "results-2000.csv"))
+data = read.csv(file.path(data_path, "full_split_sample.csv"))
 
-# baseline missing
-sum(is.na(data$time_half))
-
-# convert times from character to numeric (seconds)
-data = data %>% 
-  mutate(time_full_sec = as.numeric(hms(time_full)),
-         time_half_sec = as.numeric(hms(time_half)))
-# update missing -- 120 now
-sum(is.na(data$time_half_sec))
+# how many are at baseline missing the half split -- none. this may be by construction
+sum(is.na(data$split_half))
 
 # calculate difference between first and last halves of marathon
 data = data %>%
-  mutate(time_second_half = time_full_sec - time_half_sec,
-         diff_halves = time_second_half - time_half_sec)
+  mutate(time_second_half = chiptime - split_half,
+         diff_halves = time_second_half - split_half)
+
+# colors for gender
+gender_cols =  c(
+  "F" = "#ef8a62",
+  "M"   = "#998ec3"
+)
 
 # kernel density of finish times, different color for each gender
-data %>%
-  filter(!is.na(time_full), !is.na(gender)) %>%
-  mutate(time_full_hours = time_full_sec / 3600) %>%
+finish_time_by_gender = data %>%
+  filter(!is.na(chiptime), gender %in% c("M", "F")) %>%
+  mutate(time_full_hours = chiptime / 60) %>%
   ggplot(aes(x = time_full_hours, color = gender, fill = gender)) +
-  geom_density(alpha = 0.15, adjust = 1) +
+  scale_fill_manual(values = gender_cols) +
+  scale_color_manual(values = gender_cols) +
+  geom_density(alpha = 0.2, adjust = 1) +
   labs(
     title = "Finish Time Distribution by Gender",
     x = "Finish time (hours)",
@@ -50,12 +56,15 @@ data %>%
   ) +
   coord_cartesian(xlim = c(2, 7)) +
   theme_minimal(base_size = 12)
+# save for overleaf
+ggsave(file.path(pdf_path, "finish_by_gender_all.pdf"), finish_time_by_gender, width = 5, height = 3.5, device = cairo_pdf)
 
 # kernel density of first and second half split diffs
-data %>%
-  filter(!is.na(diff_halves), !is.na(gender)) %>%
-  mutate(diff_halves_min = diff_halves / 60) %>%
-  ggplot(aes(x = diff_halves_min, color = gender, fill = gender)) +
+split_diff_by_gender = data %>%
+  filter(!is.na(diff_halves), gender %in% c("M", "F")) %>%
+  ggplot(aes(x = diff_halves, color = gender, fill = gender)) +
+  scale_fill_manual(values = gender_cols) +
+  scale_color_manual(values = gender_cols) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "gray70") +
   geom_density(alpha = 0.15, adjust = 1) +
   labs(
@@ -65,16 +74,19 @@ data %>%
     color = "Gender",
     fill  = "Gender"
   ) +
-  coord_cartesian(xlim = c(-45, 45)) +
+  coord_cartesian(xlim = c(-45, 90)) +
   theme_minimal(base_size = 12)
+ggsave(file.path(pdf_path, "split_diff_by_gender_all.pdf"), split_diff_by_gender, width = 5, height = 3.5, device = cairo_pdf)
 
 # percent difference from first split of second split, by gender
 data = data %>%
-  mutate(pct_diff = (diff_halves / time_half_sec) * 100)
+  mutate(pct_diff = (diff_halves / split_half) * 100)
 
-data %>%
-  filter(!is.na(pct_diff), !is.na(gender)) %>%
+split_pct_diff_by_gender = data %>%
+  filter(!is.na(pct_diff), gender %in% c("M", "F")) %>%
   ggplot(aes(x = pct_diff, color = gender, fill = gender)) +
+  scale_fill_manual(values = gender_cols) +
+  scale_color_manual(values = gender_cols) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "gray70") +
   geom_density(alpha = 0.15, adjust = 1) +
   labs(
@@ -84,38 +96,12 @@ data %>%
     color = "Gender",
     fill = "Gender"
   ) +
-  coord_cartesian(xlim = c(-30, 30)) +
+  coord_cartesian(xlim = c(-30, 60)) +
   theme_minimal(base_size = 12)
-
-### KL divergence
-# Suppose your data frame has time_full_hours and gender
-male_times = data %>%
-  filter(gender == "Male", !is.na(pct_diff)) %>%
-  pull(pct_diff)
-
-female_times <- data %>%
-  filter(gender == "Female", !is.na(pct_diff)) %>%
-  pull(pct_diff)
-
-# 1. Estimate densities on same grid
-breaks <- seq(-100, 390, by = 0.1)
-male_hist <- hist(male_times, breaks = breaks, plot = FALSE)
-female_hist <- hist(female_times, breaks = breaks, plot = FALSE)
-
-# 2. Convert to probabilities
-p <- male_hist$density / sum(male_hist$density)
-q <- female_hist$density / sum(female_hist$density)
-
-# 3. Compute KL divergence (P || Q)
-ks.test(male_times, female_times)
+ggsave(file.path(pdf_path, "split_pct_diff_by_gender_all.pdf"), split_pct_diff_by_gender, width = 5, height = 3.5, device = cairo_pdf)
 
 # share of men vs women who have a second half split that's 10% slower than the first half
-length(male_times[male_times >=10])/length(male_times)
-length(female_times[female_times>=10])/length(female_times)
-
-# 20%?
-length(male_times[male_times >=20])/length(male_times)
-length(female_times[female_times>=20])/length(female_times)
-
+nrow(data[data$gender == "M" & data$pct_diff >= 10,])/nrow(data[data$gender == "M",])
+nrow(data[data$gender == "F" & data$pct_diff >= 10,])/nrow(data[data$gender == "F",])
 
 
